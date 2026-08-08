@@ -31,27 +31,37 @@ export default async function handler(req, res) {
     });
 
     try {
-      // 1. Fetching from Evopay Cash API
-      const response = await fetch('https://pix.evopay.cash/v1/pix/', {
-        method: 'POST',
-        headers: {
-          'API-Key': 'f8055c9e-6a4c-442f-a431-3378adf00528',
-          'Content-Type': 'application/json'
-        },
-        body: postData
-      });
-
+      // 1. Fetching from Evopay Cash API. Evopay occasionally returns a
+      // transient 5xx ("A critical error occurred, please try again later.")
+      // that succeeds immediately on retry, so give it one automatic retry
+      // before surfacing an error to the donor.
+      let response;
       let data;
       let responseText = '';
-      try {
-        responseText = await response.text();
-        data = JSON.parse(responseText);
-      } catch (parseErr) {
-        console.error('Evopay returned non-JSON:', responseText);
-        return res.status(response.status).json({
-          error: 'Evopay API returned an invalid response',
-          details: responseText
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        response = await fetch('https://pix.evopay.cash/v1/pix/', {
+          method: 'POST',
+          headers: {
+            'API-Key': 'f8055c9e-6a4c-442f-a431-3378adf00528',
+            'Content-Type': 'application/json'
+          },
+          body: postData
         });
+
+        responseText = await response.text();
+        try {
+          data = JSON.parse(responseText);
+        } catch (parseErr) {
+          console.error('Evopay returned non-JSON:', responseText);
+          return res.status(response.status).json({
+            error: 'Evopay API returned an invalid response',
+            details: responseText
+          });
+        }
+
+        if (response.ok || attempt === 2) break;
+        console.warn('Evopay respondeu com erro, tentando novamente:', response.status, responseText);
+        await new Promise(r => setTimeout(r, 600));
       }
 
       // 2. If Pix generated successfully, report it to Utmify BEFORE responding.
