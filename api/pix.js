@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     const payload = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
 
     // Pass UTMs to callbackUrl so the webhook can retrieve them later
-    const baseUrl = 'https://vakinha-livid.vercel.app';
+    const baseUrl = 'https://vakinha-alpha.vercel.app';
     const callbackUrl = new URL(baseUrl + '/api/webhook');
     if (payload.trackingParameters) {
       for (const [key, val] of Object.entries(payload.trackingParameters)) {
