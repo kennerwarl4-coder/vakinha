@@ -54,15 +54,12 @@ export default async function handler(req, res) {
         });
       }
 
-      // 2. Respond to the browser IMMEDIATELY once we have the Evopay result.
-      // The Utmify tracking call below must NEVER make the donor wait — if it's
-      // slow or unreachable, that's only a lost ad-attribution event, not a
-      // failed donation. Reporting it *after* res.json() keeps this Pix from
-      // ever showing "erro de conexão" to a donor whose Pix was actually created.
-      res.status(response.status).json(data);
-
-      // 3. If Pix generated successfully, send event to Utmify API (best-effort,
-      // does not block or affect the response already sent above)
+      // 2. If Pix generated successfully, report it to Utmify BEFORE responding.
+      // Vercel serverless functions can freeze execution right after the
+      // response is sent, so any fetch started after res.json() may never
+      // actually complete — that's why sales stopped reaching Utmify. A short,
+      // hard-capped timeout keeps this from ever reproducing the old "erro de
+      // conexão" bug (which was caused by an unbounded, much slower hang).
       if (response.ok && data && data.qrCodeText) {
         try {
           const orderId = data.txid || data.id || ('pix_' + Date.now());
@@ -112,10 +109,11 @@ export default async function handler(req, res) {
             }
           };
 
-          // Give Utmify a hard timeout so a hung request can never stretch out
-          // this function's execution time unnecessarily.
+          // Hard-capped timeout: bounds how long the donor waits, while still
+          // giving Utmify a real chance to receive the sale before the
+          // function's execution ends.
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          const timeoutId = setTimeout(() => controller.abort(), 4000);
           try {
             await fetch('https://api.utmify.com.br/api-credentials/orders', {
               method: 'POST',
@@ -135,6 +133,9 @@ export default async function handler(req, res) {
           console.error('Erro ao enviar para Utmify:', utmErr);
         }
       }
+
+      // 3. Respond to the browser once Utmify reporting has been attempted.
+      res.status(response.status).json(data);
     } catch (err) {
       console.error('Error proxying to Evopay:', err);
       if (!res.headersSent) {
