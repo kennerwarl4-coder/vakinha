@@ -5453,6 +5453,12 @@
     }
   </style>
   <style id="visual-polish">
+    /* Story column was double-padded (nested wrapper repeated the parent's
+       16px), making the text ~32px narrower than the hero photo/stats card. */
+    .sc-dhKdcB.DzrjH.jWiEuC {
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+    }
     @keyframes fadeInUp {
       from { opacity: 0; transform: translateY(14px); }
       to { opacity: 1; transform: translateY(0); }
